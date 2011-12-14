@@ -119,6 +119,21 @@ def CheckSinCos(context):
     context.Result(result)
     return result
 
+## Check for protobufs support
+if (os.environ["PROTOC"] 
+    and os.environ["PROTOC_INC"] 
+    and os.environ["PROTOC_LIB"]):
+    print "Protocol buffers using protoc=%s with lib=%s and include=%s" %(
+        os.environ["PROTOC"], os.environ["PROTOC_INC"], 
+        os.environ["PROTOC_LIB"])
+else:
+    print """Can't continue without Google Protocol Buffers.
+Make sure PROTOC, PROTOC_INC, and PROTOC_LIB env vars are set.
+e.g., PROTOC=/usr/local/bin/protoc 
+      PROTOC_INC=/usr/local/include 
+      PROTOC_LIB=/usr/local/lib"""
+        
+
 udfEnv = Environment()
 if os.environ.has_key('MYSQL_SERVER_DIR'):
     mysql_server_dir = os.environ['MYSQL_SERVER_DIR']
@@ -145,6 +160,9 @@ LSST Query Services worker package
 # Build/install things
 #
 
+## Build worker protocol
+SConscript("proto/SConscript", exports={'env' : env})
+
 ## Build lib twice, with and without xrd
 ## Must invoke w/ variant_dir at top-level SConstruct.
 envNoXrd = env.Clone(CCFLAGS=["-g","-DNO_XROOTD_FS"])
@@ -155,15 +173,17 @@ sfsObjs = map(lambda f: env.SharedObject(os.path.join(xrd_dir, "src",
               ["XrdSfsCallBack.cc","XrdSfsNative.cc"])
 env.Append(sfsObjs=sfsObjs)
 envNoXrd.Append(sfsObjs=sfsObjs)
-#for bldDir, expEnv in [['bld',env], ['bldNoXrd',envNoXrd]]:
-for bldDir, expEnv in [['bld',env]]:
+for bldDir, expEnv in [['bld',env], ['bldNoXrd',envNoXrd]]:
+#for bldDir, expEnv in [['bld',env]]:
     try:
-        VariantDir(bldDir, 'src')               
+        VariantDir(bldDir, 'src')       
         SConscript("src/SConscript.lib", variant_dir=bldDir,
                    exports={'env' : expEnv, 'xrd_dir' : xrd_dir})
     except Exception, e:
         print >> sys.stderr, "%s: %s" % (os.path.join("src", "SConscript.lib"), e)
 
+
+######################################################################
 # Build UDFs
 try:
     #raise Warning("Udf building DISABLED. Comment-out line in SConstruct to enable")
@@ -171,6 +191,8 @@ try:
 except Exception, e:
     print >> sys.stderr, "%s: %s" % (os.path.join("udf", "SConscript"), e)
 
+
+######################################################################
 for d in Split("tests doc"): 
     if os.path.isdir(d):
         try:
